@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Audio Recorder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+        <h1 class="text-2xl font-bold mb-4">Live Audio Recorder</h1>
+        <button id="startBtn" class="bg-green-500 text-white px-4 py-2 rounded mr-2" onclick="startRecording()">Start Recording</button>
+        <button id="stopBtn" class="bg-red-500 text-white px-4 py-2 rounded" onclick="stopRecording()" disabled>Stop Recording</button>
+        <p id="status" class="mt-4 text-gray-600"></p>
+        <ul id="recordingsList" class="mt-4 list-disc list-inside"></ul>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const recordingsList = document.getElementById('recordingsList');
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMicrophone();
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    audioChunks = [];
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'recording.wav');
+
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        status.textContent = `Recording saved: ${result.filename}`;
+                        const li = document.createElement('li');
+                        li.innerHTML = `<a href="/recordings/${result.filename}" class="text-blue-500">${result.filename}</a>`;
+                        recordingsList.appendChild(li);
+                    } else {
+                        status.textContent = `Error: ${result.error}`;
+                    }
+                };
+
+                mediaRecorder.start();
+                status.textContent = 'Recording...';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } catch (err) {
+                status.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            status.textContent = 'Processing...';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+    </script>
+</body>
+</html>
